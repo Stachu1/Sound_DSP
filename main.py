@@ -6,25 +6,24 @@ from scipy.signal import butter, filtfilt
 
 
 SAMPLE_RATE = 44100
-DURRATION = 31
 INT16_MAX = 32767
 
 
 
-def gen_square(freq: float) -> np.ndarray:
-    t = np.linspace(0, DURRATION, int(SAMPLE_RATE * DURRATION), endpoint=False)
+def gen_square(freq: float, durration: float = 5) -> np.ndarray:
+    t = np.linspace(0, durration, int(SAMPLE_RATE * durration), endpoint=False)
     waveform = INT16_MAX * signal.square(2 * np.pi * freq * t)
     return waveform
 
 
-def gen_sine(freq: float) -> np.ndarray:
-    t = np.linspace(0, DURRATION, int(SAMPLE_RATE * DURRATION), endpoint=False)
+def gen_sine(freq: float, durration: float = 5) -> np.ndarray:
+    t = np.linspace(0, durration, int(SAMPLE_RATE * durration), endpoint=False)
     waveform = INT16_MAX * np.sin(2 * np.pi * freq * t)
     return waveform
 
 
-def gen_noise(amplitude: float = 1) -> np.ndarray:
-    waveform = np.random.normal(0, 1, SAMPLE_RATE * DURRATION)
+def gen_noise(amplitude: float = 1, durration: float = 5) -> np.ndarray:
+    waveform = np.random.normal(0, 1, SAMPLE_RATE * durration)
     return normalize(waveform, amplitude)
 
 
@@ -59,11 +58,11 @@ def envelope_detection(waveform: np.ndarray, cutoff_freq: float = 10) -> np.ndar
 
 
 def save_wav(waveform: np.ndarray, file_name: str = "wave.wav") -> None:
-    wavfile.write("sounds/" + file_name, SAMPLE_RATE, waveform.astype(np.int16))
+    wavfile.write(f"sounds/{file_name}", SAMPLE_RATE, waveform.astype(np.int16))
 
 
 def read_wav(file_name: str) -> np.ndarray:
-    sr, waveform = wavfile.read("sounds/" + file_name)
+    sr, waveform = wavfile.read(f"sounds/{file_name}")
     if len(waveform.shape) > 1:
         waveform = waveform.mean(axis=1)
     return waveform.astype(np.float32)
