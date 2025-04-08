@@ -75,7 +75,7 @@ def plot_wav(waveform: np.ndarray) -> None:
     plt.title("Waveform")
 
 
-def spectogram(waveform: np.ndarray, freq_lim: int = 22050) -> None:
+def spectogram(waveform: np.ndarray, freq_lim: int = 10000) -> None:
     plt.specgram(waveform, Fs=SAMPLE_RATE, NFFT=1024, noverlap=512, cmap="inferno")
     plt.xlabel("Time (s)")
     plt.ylabel("Frequency (Hz)")
@@ -85,31 +85,15 @@ def spectogram(waveform: np.ndarray, freq_lim: int = 22050) -> None:
 
 
 
-waveform = gen_noise(INT16_MAX)
-for i in range(10):
-    waveform += mask_wav(gen_sine(300 * (i + 1)), i/3 + i/10, i/3 + i/10 + 0.3)
 
-waveform = normalize(waveform, INT16_MAX)
+waveform = read_wav("bird.wav")
+waveform = trim_wav(waveform, 0, 5)
+template = trim_wav(waveform, 2.45, 2.7)
 
-# template = trim_wav(gen_sine(900), 0, 0.3)
-# correlation = matched_filter(waveform, template)
-# envelope = envelope_detection(correlation, 100)
-# plot_wav(envelope)
+correlation = matched_filter(waveform, template)
+envelope = envelope_detection(correlation, 50)
 
-# spectogram(waveform, 8000)
-
-# waveform = read_wav("long.wav")
-# template = trim_wav(gen_square(1000), 3.0001, 3.05)
-
-# template = trim_wav(waveform, 3.325, 3.375)
-
-# template = trim_wav(gen_sine(1000), 0, 0.045)
-# correlation = matched_filter(waveform, template)
-# envelope = envelope_detection(correlation, 50)
-
-
-save_wav(waveform, "wave.wav")
-
-# plot_wav(envelope)
-spectogram(waveform)
+plot_wav(envelope)
+# plot_wav(waveform)
+# spectogram(waveform)
 plt.show()
