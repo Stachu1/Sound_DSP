@@ -3,7 +3,8 @@ from scipy.io import wavfile
 from scipy import signal
 from scipy.signal import find_peaks
 from scipy.signal import butter, filtfilt
-
+from scipy.signal import hilbert, firwin, lfilter
+from scipy.ndimage import grey_dilation, grey_erosion
 
 SAMPLE_RATE = 44100
 INT16_MAX = 32767
@@ -68,7 +69,7 @@ def read_wav(file_name: str) -> np.ndarray:
     return waveform.astype(np.float32)
 
 
-def detect_peaks_with_prominence(data, prominence=None, distance=None):
+def detect_peaks_with_prominence(data, prominence=None, distance=15000):
     "35280 the distance is calculated by multipling the time of the template by the sample rate" 
     "(not needed for the case i tested when chenged to standard deviation from median)"
     peaks, properties = find_peaks(data, prominence=prominence, distance=distance)
@@ -82,6 +83,21 @@ def bandpass_filter(data, lowcut, highcut, fs, order=4):
     b, a = butter(order, [low, high], btype='band')
     return filtfilt(b, a, data)
 
+def hilbert_envelope(waveform: np.ndarray) -> np.ndarray:
+    analytic_signal = hilbert(waveform)
+    envelope = np.abs(analytic_signal)
+    return envelope
+
+def fir_lowpass_filter(data: np.ndarray, cutoff_hz: float, numtaps: int = 201, window: str = 'hamming') -> np.ndarray:
+    fir_coeff = firwin(numtaps, cutoff_hz, fs=SAMPLE_RATE, window=window)
+    filtered = lfilter(fir_coeff, 1.0, data)
+    return filtered
+def morphological_envelope(waveform: np.ndarray, size: int = 441):  
+    waveform_abs = np.abs(waveform)
+    dilated = grey_dilation(waveform_abs, size=size)
+    eroded = grey_erosion(waveform_abs, size=size)
+    envelope = (dilated + eroded) / 2 
+    return envelope
 
 def plot_wav(waveform: np.ndarray, peaks: None) -> None:
     time_axis = np.linspace(0, len(waveform)/SAMPLE_RATE, len(waveform))
@@ -123,20 +139,21 @@ def plot_fft_of_template(template: np.ndarray):
 
 
 
-waveform = read_wav("Loud_bn_beep_different_volume.wav")
+waveform = read_wav("2khz_beeping_with_beep.wav")
 waveform = normalize(waveform, INT16_MAX)
 
 template = trim_wav(read_wav("Car_beep_2.wav"), 1.0, 1.8)
 template = normalize(template, INT16_MAX)
 
 correlation = matched_filter(waveform, template)
-envelope = envelope_detection(correlation, 50)
-
-#peaks = detect_peaks(envelope, 0.25, min_distance=5000)
+# envelope = envelope_detection(correlation, 50)
+# envelope = hilbert_envelope(correlation)
+envelope = morphological_envelope(correlation, size=1500)
+envelope = fir_lowpass_filter(envelope, cutoff_hz=20, numtaps=201, window='hamming')
 #peaks = detect_peaks_with_prominence(envelope,  0.18)
 
 noise_level = np.std(envelope)
-peaks = detect_peaks_with_prominence(envelope, prominence=2.7 * noise_level)
+peaks = detect_peaks_with_prominence(envelope, prominence= 2.7 * noise_level)
 
 plot_wav(envelope, peaks)
 plt.show()
