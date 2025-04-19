@@ -50,7 +50,10 @@ def trim_wav(waveform: np.ndarray, start_time: float, end_time: float) -> np.nda
 def matched_filter(waveform: np.ndarray, template: np.ndarray) -> np.ndarray:    
     correlation = np.convolve(waveform, np.flip(template), mode='valid')
     return normalize(correlation)
-    
+
+def moving_average(data: np.ndarray, window_size: int = 11) -> np.ndarray:
+    """Smooth the data using a simple moving average filter."""
+    return np.convolve(data, np.ones(window_size)/window_size, mode='same')
 
 def envelope_detection(waveform: np.ndarray, cutoff_freq: float = 10) -> np.ndarray:
     waveform = abs(waveform)
@@ -82,14 +85,14 @@ def read_wav(file_name: str) -> np.ndarray:
     return waveform.astype(np.float32)
 
 
-def detect_peaks_with_prominence(data, prominence=None, distance=15000):
+def detect_peaks_with_prominence(data, prominence=None, distance=35280):
     "35280 the distance is calculated by multipling the time of the template by the sample rate" 
     "(not needed for the case i tested when chenged to standard deviation from median)"
     peaks, properties = find_peaks(data, prominence=prominence, distance=distance)
     return peaks
 
 
-def bandpass_filter(data, lowcut, highcut, fs, order=4):
+def bandpass_filter(data, lowcut, highcut, fs, order=5):
     nyquist = 0.5 * fs
     low = lowcut / nyquist
     high = highcut / nyquist
@@ -147,15 +150,15 @@ def plot_live_peaks(waveform: np.ndarray, peaks):
     plt.legend()
     plt.grid(True)
     plt.ylim(0,1) 
-    plt.pause(0.1)
+    plt.pause(0.0001)
 
-CHUNK_SIZE = 44100  
-OVERLAP = CHUNK_SIZE // 1
+CHUNK_SIZE = 44100   
+OVERLAP = CHUNK_SIZE // 4
 DURATION = 15
 def live_audio_processing():
     plt.ion()
     fig = plt.figure()
-    template = trim_wav(read_wav("Car_beep_2.wav"), 1.0, 1.8)
+    template = trim_wav(read_wav("Bird.wav"), 4.7, 5.5)
     template = normalize(template, INT16_MAX)
     
     print("Starting live audio processing. Press Ctrl+C to stop...")
@@ -170,17 +173,18 @@ def live_audio_processing():
                 buffer[:CHUNK_SIZE - OVERLAP] = buffer[OVERLAP:]
                 buffer[CHUNK_SIZE - OVERLAP:] = new_samples
                 normalized_block = normalize(buffer, INT16_MAX)
-                bandpassed_block = bandpass_filter(normalized_block, lowcut=1000, highcut=5000, fs=SAMPLE_RATE)
-                correlation = matched_filter(bandpassed_block, template)
+                # bandpassed_block = bandpass_filter(normalized_block, lowcut=2000, highcut=10000, fs=SAMPLE_RATE)
+                correlation = matched_filter(normalized_block, template)
                 envelope = envelope_detection(correlation, cutoff_freq=500)
-                # envelope = morphological_envelope(correlation, size=100)
-                # envelope = fir_lowpass_filter(envelope, cutoff_hz=20, numtaps=301, window='hamming')
+                # envelope = morphological_envelope(correlation, size=500)
+                envelope = fir_lowpass_filter(envelope, cutoff_hz=20, numtaps=201, window='hamming')
+                envelope = moving_average(envelope, window_size=11)
                 noise_level = np.std(envelope)
-                # peaks = detect_peaks_with_prominence(envelope, prominence= 3.5 * noise_level)
-                peaks = detect_peaks_with_prominence(envelope,  0.3)
+                # peaks = detect_peaks_with_prominence(envelope, prominence= 3 * noise_level)
+                peaks = detect_peaks_with_prominence(envelope,  0.4)
                 plot_live_peaks(envelope, peaks)
                 if peaks is not None and len(peaks) > 0:
-                    current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    current_time = datetime.datetime.now().strftime("%H:%M:%S")
                     print(f"Detection at {current_time}: peaks at sample indices {peaks}")
                     
     except KeyboardInterrupt:
@@ -207,7 +211,7 @@ if __name__ == '__main__':
         waveform = read_wav("recording.wav")
         waveform = normalize(waveform, INT16_MAX)
 
-        template = trim_wav(read_wav("Car_beep_2.wav"), 1.0, 1.8)
+        template = trim_wav(read_wav("Bird.wav"), 4.9, 5.8)
         template = normalize(template, INT16_MAX)
 
         correlation = matched_filter(waveform, template)
