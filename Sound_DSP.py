@@ -3,7 +3,7 @@ from scipy.io import wavfile
 from scipy import signal
 from scipy.signal import find_peaks
 from scipy.signal import butter, filtfilt
-
+import sounddevice as sd
 
 SAMPLE_RATE = 44100
 INT16_MAX = 32767
@@ -121,22 +121,73 @@ def plot_fft_of_template(template: np.ndarray):
     plt.ylabel('Magnitude')
     plt.grid(True)
 
+def plot_live_peaks(waveform: np.ndarray, peaks):
+    plt.clf()  # Clear the current figure for dynamic updating
+    time_axis = np.linspace(0, len(waveform) / SAMPLE_RATE, len(waveform))
+    plt.plot(time_axis, waveform, label="Envelope")
+    if peaks is not None and len(peaks) > 0:
+        plt.plot(time_axis[peaks], waveform[peaks], "rx", label="Detected Peaks")
+    plt.xlabel("Time (s)")
+    plt.ylabel("Amplitude")
+    plt.title("Live Processed Envelope")
+    plt.legend()
+    plt.grid(True)
+    plt.ylim(0,1) 
+    plt.pause(0.001)
+
+CHUNK_SIZE = 512
+OVERLAP = CHUNK_SIZE // 2
+
+def live_audio_processing():
+    plt.ion()
+    fig = plt.figure()
+    template = trim_wav(read_wav("Car_beep_2.wav"), 1.0, 1.8)
+    template = normalize(template, INT16_MAX)
+    
+    print("Starting live audio processing. Press Ctrl+C to stop...")
+    buffer = np.zeros(CHUNK_SIZE, dtype=np.float32)
+
+    try:
+        with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, 
+                            blocksize=OVERLAP, dtype='float32') as stream:
+            while True:
+                data, overflow = stream.read(OVERLAP)
+                new_samples = data.flatten() 
+                buffer[:CHUNK_SIZE - OVERLAP] = buffer[OVERLAP:]
+                buffer[CHUNK_SIZE - OVERLAP:] = new_samples
+                normalized_block = normalize(buffer, INT16_MAX)
+                correlation = matched_filter(normalized_block, template)
+                envelope = envelope_detection(correlation, cutoff_freq=50)
+                noise_level = np.std(envelope)
+                peaks = detect_peaks_with_prominence(envelope, prominence=2.7 * noise_level)
+                plot_live_peaks(envelope, peaks)
+    except KeyboardInterrupt:
+        print("Live audio processing stopped.")
+        plt.ioff()  
+        plt.close(fig)
 
 
-waveform = read_wav("Loud_bn_beep_different_volume.wav")
-waveform = normalize(waveform, INT16_MAX)
 
-template = trim_wav(read_wav("Car_beep_2.wav"), 1.0, 1.8)
-template = normalize(template, INT16_MAX)
+if __name__ == '__main__':
+    mode = input("Type 'live' for live recording, or press Enter to process files: ").strip().lower()
+    if mode == 'live':
+        live_audio_processing()
+    else:
 
-correlation = matched_filter(waveform, template)
-envelope = envelope_detection(correlation, 50)
+        waveform = read_wav("Loud_bn_beep_different_volume.wav")
+        waveform = normalize(waveform, INT16_MAX)
 
-#peaks = detect_peaks(envelope, 0.25, min_distance=5000)
-#peaks = detect_peaks_with_prominence(envelope,  0.18)
+        template = trim_wav(read_wav("Car_beep_2.wav"), 1.0, 1.8)
+        template = normalize(template, INT16_MAX)
 
-noise_level = np.std(envelope)
-peaks = detect_peaks_with_prominence(envelope, prominence=2.7 * noise_level)
+        correlation = matched_filter(waveform, template)
+        envelope = envelope_detection(correlation, 50)
 
-plot_wav(envelope, peaks)
-plt.show()
+        #peaks = detect_peaks(envelope, 0.25, min_distance=5000)
+        #peaks = detect_peaks_with_prominence(envelope,  0.18)
+
+        noise_level = np.std(envelope)
+        peaks = detect_peaks_with_prominence(envelope, prominence=2.7 * noise_level)
+
+        plot_wav(envelope, peaks)
+        plt.show()
