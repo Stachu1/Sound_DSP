@@ -1,8 +1,8 @@
-import numpy as np, matplotlib.pyplot as plt
+import numpy as np, matplotlib.pyplot as plt, time
 from scipy.io import wavfile
 from scipy import signal
 from scipy.signal import find_peaks
-from scipy.signal import butter, filtfilt
+from FIR_taps_generator import FIR
 
 
 SAMPLE_RATE = 44100
@@ -50,14 +50,20 @@ def matched_filter(waveform: np.ndarray, template: np.ndarray) -> np.ndarray:
     return normalize(correlation)
     
 
-def envelope_detection(waveform: np.ndarray, cutoff_freq: float = 10) -> np.ndarray:
+def envelope_detection(waveform: np.ndarray, cutoff: int = 50, order: int = 100) -> np.ndarray:
     waveform = abs(waveform)
-    cutoff_normalized = cutoff_freq / SAMPLE_RATE / 2.0
-    b, a = signal.butter(4, cutoff_normalized, btype='low')
-    return signal.filtfilt(b, a, waveform)
+    fir = FIR(SAMPLE_RATE, cutoff, order)
+    return fir.apply(waveform)
 
 
-def save_wav(waveform: np.ndarray, file_name: str = "wave.wav") -> None:
+def detect_peaks_with_prominence(data, prominence=None, distance=None):
+    "35280 the distance is calculated by multipling the time of the template by the sample rate" 
+    "(not needed for the case i tested when chenged to standard deviation from median)"
+    peaks, properties = find_peaks(data, prominence=prominence, distance=distance)
+    return peaks
+
+
+def save_wav(waveform: np.ndarray, file_name: str = "wave.wav"):
     wavfile.write(f"sounds/{file_name}", SAMPLE_RATE, waveform.astype(np.int16))
 
 
@@ -68,22 +74,7 @@ def read_wav(file_name: str) -> np.ndarray:
     return waveform.astype(np.float32)
 
 
-def detect_peaks_with_prominence(data, prominence=None, distance=None):
-    "35280 the distance is calculated by multipling the time of the template by the sample rate" 
-    "(not needed for the case i tested when chenged to standard deviation from median)"
-    peaks, properties = find_peaks(data, prominence=prominence, distance=distance)
-    return peaks
-
-
-def bandpass_filter(data, lowcut, highcut, fs, order=4):
-    nyquist = 0.5 * fs
-    low = lowcut / nyquist
-    high = highcut / nyquist
-    b, a = butter(order, [low, high], btype='band')
-    return filtfilt(b, a, data)
-
-
-def plot_wav(waveform: np.ndarray, peaks: None) -> None:
+def plot_wav(waveform: np.ndarray, peaks=None):
     time_axis = np.linspace(0, len(waveform)/SAMPLE_RATE, len(waveform))
     plt.plot(time_axis, waveform, label="Waveform")
     plt.xlabel("Time (s)")
@@ -93,14 +84,10 @@ def plot_wav(waveform: np.ndarray, peaks: None) -> None:
     plt.grid(True)
 
     if peaks is not None:
-        print("Detected Peaks at Times (seconds):")
-        for peak in peaks:
-            peak_time = peak / SAMPLE_RATE
-            print(f"{peak_time:.6f} s")
         plt.plot(time_axis[peaks], waveform[peaks], "rx", label="Detected Peaks") 
 
 
-def spectogram(waveform: np.ndarray, freq_lim: int = 10000) -> None:
+def spectogram(waveform: np.ndarray, freq_lim: int = 10000):
     plt.specgram(waveform, Fs=SAMPLE_RATE, NFFT=1024, noverlap=512, cmap="inferno")
     plt.xlabel("Time (s)")
     plt.ylabel("Frequency (Hz)")
@@ -122,21 +109,32 @@ def plot_fft_of_template(template: np.ndarray):
     plt.grid(True)
 
 
+if __name__ == "__main__":
+    t_start = time.time()
+    print("Gathering waveforms...", end="\r")
+    waveform = read_wav("Loud_bn_beep_different_volume.wav")
+    waveform = normalize(waveform, INT16_MAX)
 
-waveform = read_wav("Loud_bn_beep_different_volume.wav")
-waveform = normalize(waveform, INT16_MAX)
+    template = trim_wav(read_wav("Car_beep_2.wav"), 1.0, 1.8)
+    template = normalize(template, INT16_MAX)
 
-template = trim_wav(read_wav("Car_beep_2.wav"), 1.0, 1.8)
-template = normalize(template, INT16_MAX)
+    print(f"Gathering waveforms - \33[92mDone\33[0m in {time.time() - t_start:.2f}s\nApplying matched filter...", end="\r")
+    t_start = time.time()
 
-correlation = matched_filter(waveform, template)
-envelope = envelope_detection(correlation, 50)
+    correlation = matched_filter(waveform, template)
 
-#peaks = detect_peaks(envelope, 0.25, min_distance=5000)
-#peaks = detect_peaks_with_prominence(envelope,  0.18)
+    print(f"Applying matched filter - \33[92mDone\33[0m in {time.time() - t_start:.2f}s\nApplying envelope detection...", end="\r")
+    t_start = time.time()
 
-noise_level = np.std(envelope)
-peaks = detect_peaks_with_prominence(envelope, prominence=2.7 * noise_level)
+    envelope = envelope_detection(correlation, 50, 500)
 
-plot_wav(envelope, peaks)
-plt.show()
+    print(f"Applying envelope detection - \33[92mDone\33[0m in {time.time() - t_start:.2f}s\nDetecting peaks...", end="\r")
+    t_start = time.time()
+
+    noise_level = np.std(envelope)
+    peaks = detect_peaks_with_prominence(envelope, prominence=2.7 * noise_level)
+
+    print(f"Detecting peaks - \33[92mDone\33[0m in {time.time() - t_start:.2f}s")
+
+    plot_wav(envelope, peaks)
+    plt.show()
