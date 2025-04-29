@@ -110,13 +110,19 @@ def plot_fft_of_template(template: np.ndarray):
 
 
 if __name__ == "__main__":
+    fir_lowpass = FIR(SAMPLE_RATE, 5000, order=2000, fir_type="lowpass")
+    fir_highpass = FIR(SAMPLE_RATE, 3000, order=2000, fir_type="highpass")
+
+
     t_start = time.time()
     print("Gathering waveforms...", end="\r")
-    waveform = read_wav("Loud_bn_beep_different_volume.wav")
+
+    waveform = trim_wav(read_wav("Bird.wav"), 0, 10)
+    waveform = fir_lowpass.apply(waveform)
+    waveform = fir_highpass.apply(waveform)
     waveform = normalize(waveform, INT16_MAX)
 
-    template = trim_wav(read_wav("Car_beep_2.wav"), 1.0, 1.8)
-    template = normalize(template, INT16_MAX)
+    template = trim_wav(waveform, 2.5, 2.7)
 
     print(f"Gathering waveforms - \33[92mDone\33[0m in {time.time() - t_start:.2f}s\nApplying matched filter...", end="\r")
     t_start = time.time()
@@ -126,13 +132,13 @@ if __name__ == "__main__":
     print(f"Applying matched filter - \33[92mDone\33[0m in {time.time() - t_start:.2f}s\nApplying envelope detection...", end="\r")
     t_start = time.time()
 
-    envelope = envelope_detection(correlation, 50, 500)
+    envelope = envelope_detection(correlation, 30, 600)
 
     print(f"Applying envelope detection - \33[92mDone\33[0m in {time.time() - t_start:.2f}s\nDetecting peaks...", end="\r")
     t_start = time.time()
 
     noise_level = np.std(envelope)
-    peaks = detect_peaks_with_prominence(envelope, prominence=2.7 * noise_level)
+    peaks = detect_peaks_with_prominence(envelope, prominence=1.7 * noise_level)
 
     print(f"Detecting peaks - \33[92mDone\33[0m in {time.time() - t_start:.2f}s")
 
