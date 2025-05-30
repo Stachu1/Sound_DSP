@@ -96,14 +96,14 @@ def spectogram(waveform: np.ndarray, freq_lim: int = 10000):
     plt.ylim(0, freq_lim)
 
 
-def plot_fft_of_template(template: np.ndarray):
-    fft_result = np.fft.fft(template)
-    freqs = np.fft.fftfreq(len(template), 1/SAMPLE_RATE)
-    magnitude = np.abs(fft_result[:len(template)//2])
-    freqs = freqs[:len(template)//2]
+def plot_fft(waveform: np.ndarray):
+    fft_result = np.fft.fft(waveform)
+    freqs = np.fft.fftfreq(len(waveform), 1/SAMPLE_RATE)
+    magnitude = np.abs(fft_result[:len(waveform)//2])
+    freqs = freqs[:len(waveform)//2]
     plt.figure(figsize=(10, 6))
     plt.plot(freqs, magnitude)
-    plt.title('FFT of the Template (Trimmed Square Wave)')
+    plt.title('FFT of the waveform')
     plt.xlabel('Frequency (Hz)')
     plt.ylabel('Magnitude')
     plt.grid(True)
@@ -111,7 +111,7 @@ def plot_fft_of_template(template: np.ndarray):
 
 if __name__ == "__main__":
     fir_lowpass = FIR(SAMPLE_RATE, 5000, order=2000, fir_type="lowpass")
-    fir_highpass = FIR(SAMPLE_RATE, 3000, order=2000, fir_type="highpass")
+    fir_highpass = FIR(SAMPLE_RATE, 4000, order=2000, fir_type="highpass")
 
 
     t_start = time.time()
@@ -122,7 +122,7 @@ if __name__ == "__main__":
     waveform = fir_highpass.apply(waveform)
     waveform = normalize(waveform, INT16_MAX)
 
-    template = trim_wav(waveform, 2.5, 2.7)
+    template = trim_wav(waveform, 1.75, 1.95)
 
     print(f"Gathering waveforms - \33[92mDone\33[0m in {time.time() - t_start:.2f}s\nApplying matched filter...", end="\r")
     t_start = time.time()
@@ -142,5 +142,6 @@ if __name__ == "__main__":
 
     print(f"Detecting peaks - \33[92mDone\33[0m in {time.time() - t_start:.2f}s")
 
-    plot_wav(envelope, peaks)
+    # plot_wav(envelope, peaks)
+    plot_wav(normalize(envelope), peaks)
     plt.show()
