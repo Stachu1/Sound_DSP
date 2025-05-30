@@ -6,19 +6,18 @@ from FIR_taps_generator import FIR
 
 
 SAMPLE_RATE = 44100
-INT16_MAX = 32767
 
 
 
 def gen_square(freq: float, durration: float = 5) -> np.ndarray:
     t = np.linspace(0, durration, int(SAMPLE_RATE * durration), endpoint=False)
-    waveform = INT16_MAX * signal.square(2 * np.pi * freq * t)
+    waveform = signal.square(2 * np.pi * freq * t)
     return waveform
 
 
 def gen_sine(freq: float, durration: float = 5) -> np.ndarray:
     t = np.linspace(0, durration, int(SAMPLE_RATE * durration), endpoint=False)
-    waveform = INT16_MAX * np.sin(2 * np.pi * freq * t)
+    waveform = np.sin(2 * np.pi * freq * t)
     return waveform
 
 
@@ -46,7 +45,7 @@ def trim_wav(waveform: np.ndarray, start_time: float, end_time: float) -> np.nda
 
 
 def matched_filter(waveform: np.ndarray, template: np.ndarray) -> np.ndarray:    
-    correlation = np.convolve(waveform, np.flip(template), mode='valid')
+    correlation = np.convolve(waveform, np.flip(template), mode="same")
     return normalize(correlation)
     
 
@@ -56,14 +55,12 @@ def envelope_detection(waveform: np.ndarray, cutoff: int = 50, order: int = 100)
     return fir.apply(waveform)
 
 
-def detect_peaks_with_prominence(data, prominence=None, distance=None):
-    "35280 the distance is calculated by multipling the time of the template by the sample rate" 
-    "(not needed for the case i tested when chenged to standard deviation from median)"
+def detect_peaks(data, prominence=None, distance=None) -> np.ndarray:
     peaks, properties = find_peaks(data, prominence=prominence, distance=distance)
     return peaks
 
 
-def save_wav(waveform: np.ndarray, file_name: str = "wave.wav"):
+def save_wav(waveform: np.ndarray, file_name: str = "wave.wav") -> None:
     wavfile.write(f"sounds/{file_name}", SAMPLE_RATE, waveform.astype(np.int16))
 
 
@@ -74,7 +71,7 @@ def read_wav(file_name: str) -> np.ndarray:
     return waveform.astype(np.float32)
 
 
-def plot_wav(waveform: np.ndarray, peaks=None):
+def plot_wav(waveform: np.ndarray, peaks=None) -> None:
     time_axis = np.linspace(0, len(waveform)/SAMPLE_RATE, len(waveform))
     plt.plot(time_axis, waveform, label="Waveform")
     plt.xlabel("Time (s)")
@@ -87,7 +84,7 @@ def plot_wav(waveform: np.ndarray, peaks=None):
         plt.plot(time_axis[peaks], waveform[peaks], "rx", label="Detected Peaks") 
 
 
-def spectogram(waveform: np.ndarray, freq_lim: int = 10000):
+def spectogram(waveform: np.ndarray, freq_lim: int = 10000) -> None:
     plt.specgram(waveform, Fs=SAMPLE_RATE, NFFT=1024, noverlap=512, cmap="inferno")
     plt.xlabel("Time (s)")
     plt.ylabel("Frequency (Hz)")
@@ -96,16 +93,16 @@ def spectogram(waveform: np.ndarray, freq_lim: int = 10000):
     plt.ylim(0, freq_lim)
 
 
-def plot_fft(waveform: np.ndarray):
+def plot_fft(waveform: np.ndarray) -> None:
     fft_result = np.fft.fft(waveform)
     freqs = np.fft.fftfreq(len(waveform), 1/SAMPLE_RATE)
     magnitude = np.abs(fft_result[:len(waveform)//2])
     freqs = freqs[:len(waveform)//2]
     plt.figure(figsize=(10, 6))
     plt.plot(freqs, magnitude)
-    plt.title('FFT of the waveform')
-    plt.xlabel('Frequency (Hz)')
-    plt.ylabel('Magnitude')
+    plt.title("FFT of the waveform")
+    plt.xlabel("Frequency (Hz)")
+    plt.ylabel("Magnitude")
     plt.grid(True)
 
 
@@ -115,21 +112,28 @@ if __name__ == "__main__":
 
 
     t_start = time.time()
-    print("Gathering waveforms...", end="\r")
+    print("Reading input file...", end="\r")
 
     waveform = trim_wav(read_wav("Bird.wav"), 0, 10)
+
+    print(f"Reading input file - \33[92mDone\33[0m in {time.time() - t_start:.2f}s\nFrequency filtering...", end="\r")
+    t_start = time.time()
+
     waveform = fir_lowpass.apply(waveform)
     waveform = fir_highpass.apply(waveform)
-    waveform = normalize(waveform, INT16_MAX)
 
+    print(f"Frequency filtering - \33[92mDone\33[0m in {time.time() - t_start:.2f}s\nNormalizing & Storing template...", end="\r")
+    t_start = time.time()
+
+    waveform = normalize(waveform)
     template = trim_wav(waveform, 1.75, 1.95)
 
-    print(f"Gathering waveforms - \33[92mDone\33[0m in {time.time() - t_start:.2f}s\nApplying matched filter...", end="\r")
+    print(f"Normalizing & Storing template - \33[92mDone\33[0m in {time.time() - t_start:.2f}s\nMatched filtering...", end="\r")
     t_start = time.time()
 
     correlation = matched_filter(waveform, template)
 
-    print(f"Applying matched filter - \33[92mDone\33[0m in {time.time() - t_start:.2f}s\nApplying envelope detection...", end="\r")
+    print(f"Matched filtering - \33[92mDone\33[0m in {time.time() - t_start:.2f}s\nApplying envelope detection...", end="\r")
     t_start = time.time()
 
     envelope = envelope_detection(correlation, 30, 600)
@@ -138,10 +142,9 @@ if __name__ == "__main__":
     t_start = time.time()
 
     noise_level = np.std(envelope)
-    peaks = detect_peaks_with_prominence(envelope, prominence=1.7 * noise_level)
+    peaks = detect_peaks(envelope, prominence=1.7 * noise_level)
 
     print(f"Detecting peaks - \33[92mDone\33[0m in {time.time() - t_start:.2f}s")
 
-    # plot_wav(envelope, peaks)
-    plot_wav(normalize(envelope), peaks)
+    plot_wav(envelope, peaks)
     plt.show()
