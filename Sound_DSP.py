@@ -1,7 +1,7 @@
 import numpy as np, matplotlib.pyplot as plt, time
 from scipy.io import wavfile
 from scipy import signal
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks, fftconvolve
 from FIR_taps_generator import FIR
 
 
@@ -27,7 +27,7 @@ def gen_noise(amplitude: float = 1, durration: float = 5) -> np.ndarray:
 
 
 def normalize(waveform: np.ndarray, amplitude: float = 1) -> np.ndarray:
-    return amplitude * waveform / max(abs(waveform))
+    return amplitude * waveform / np.max(np.abs(waveform))
 
 
 def mask_wav(waveform: np.ndarray, start_time: float, end_time: float) -> np.ndarray:
@@ -45,12 +45,12 @@ def trim_wav(waveform: np.ndarray, start_time: float, end_time: float) -> np.nda
 
 
 def matched_filter(waveform: np.ndarray, template: np.ndarray) -> np.ndarray:    
-    correlation = np.convolve(waveform, np.flip(template), mode="same")
-    return normalize(correlation)
+    correlation = fftconvolve(waveform, np.flip(template), mode="same")
+    return correlation
     
 
 def envelope_detection(waveform: np.ndarray, cutoff: int = 50, order: int = 100) -> np.ndarray:
-    waveform = abs(waveform)
+    waveform = np.abs(waveform)
     fir = FIR(SAMPLE_RATE, cutoff, order)
     return fir.apply(waveform)
 
@@ -107,44 +107,49 @@ def plot_fft(waveform: np.ndarray) -> None:
 
 
 if __name__ == "__main__":
+    strat_time = time.time()
+
+
     fir_lowpass = FIR(SAMPLE_RATE, 5000, order=2000, fir_type="lowpass")
     fir_highpass = FIR(SAMPLE_RATE, 4000, order=2000, fir_type="highpass")
 
 
-    t_start = time.time()
+    d_time = time.time()
     print("Reading input file...", end="\r")
 
     waveform = trim_wav(read_wav("Bird.wav"), 0, 10)
 
-    print(f"Reading input file - \33[92mDone\33[0m in {time.time() - t_start:.2f}s\nFrequency filtering...", end="\r")
-    t_start = time.time()
+    print(f"Reading input file - \33[92mDone\33[0m in {time.time() - d_time:.2f}s\nFrequency filtering...", end="\r")
+    d_time = time.time()
 
     waveform = fir_lowpass.apply(waveform)
     waveform = fir_highpass.apply(waveform)
 
-    print(f"Frequency filtering - \33[92mDone\33[0m in {time.time() - t_start:.2f}s\nNormalizing & Storing template...", end="\r")
-    t_start = time.time()
+    print(f"Frequency filtering - \33[92mDone\33[0m in {time.time() - d_time:.2f}s\nNormalizing & Storing template...", end="\r")
+    d_time = time.time()
 
     waveform = normalize(waveform)
     template = trim_wav(waveform, 1.75, 1.95)
 
-    print(f"Normalizing & Storing template - \33[92mDone\33[0m in {time.time() - t_start:.2f}s\nMatched filtering...", end="\r")
-    t_start = time.time()
+    print(f"Normalizing & Storing template - \33[92mDone\33[0m in {time.time() - d_time:.2f}s\nMatched filtering...", end="\r")
+    d_time = time.time()
 
     correlation = matched_filter(waveform, template)
 
-    print(f"Matched filtering - \33[92mDone\33[0m in {time.time() - t_start:.2f}s\nApplying envelope detection...", end="\r")
-    t_start = time.time()
+    print(f"Matched filtering - \33[92mDone\33[0m in {time.time() - d_time:.2f}s\nApplying envelope detection...", end="\r")
+    d_time = time.time()
 
     envelope = envelope_detection(correlation, 30, 600)
 
-    print(f"Applying envelope detection - \33[92mDone\33[0m in {time.time() - t_start:.2f}s\nDetecting peaks...", end="\r")
-    t_start = time.time()
+    print(f"Applying envelope detection - \33[92mDone\33[0m in {time.time() - d_time:.2f}s\nDetecting peaks...", end="\r")
+    d_time = time.time()
 
     noise_level = np.std(envelope)
     peaks = detect_peaks(envelope, prominence=1.7 * noise_level)
 
-    print(f"Detecting peaks - \33[92mDone\33[0m in {time.time() - t_start:.2f}s")
+    print(f"Detecting peaks - \33[92mDone\33[0m in {time.time() - d_time:.2f}s")
+    print(f"\33[1;4mTotal processing time: {time.time() - strat_time:.2f}s\33[0m")
 
+    envelope = normalize(envelope)
     plot_wav(envelope, peaks)
     plt.show()

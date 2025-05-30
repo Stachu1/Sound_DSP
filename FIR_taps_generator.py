@@ -1,4 +1,4 @@
-from scipy.signal import firwin
+from scipy.signal import firwin, fftconvolve
 import numpy as np
 
 
@@ -21,4 +21,4 @@ class FIR:
 
 
     def apply(self, data: np.ndarray) -> np.ndarray:
-        return np.convolve(data, self.taps, mode="same")
+        return fftconvolve(data, self.taps, mode="same")
