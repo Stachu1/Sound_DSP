@@ -22,12 +22,18 @@ def gen_sine(freq: float, durration: float = 5) -> np.ndarray:
 
 
 def gen_noise(amplitude: float = 1, durration: float = 5) -> np.ndarray:
-    waveform = np.random.normal(0, 1, SAMPLE_RATE * durration)
-    return normalize(waveform, amplitude)
+    waveform = np.random.normal(0, amplitude, SAMPLE_RATE * durration)
+    return waveform
 
 
 def normalize(waveform: np.ndarray, amplitude: float = 1) -> np.ndarray:
     return amplitude * waveform / np.max(np.abs(waveform))
+
+
+def zero_pad(waveform: np.ndarray, durration: float, end=True) -> np.ndarray:
+    if end:
+        return np.concatenate((waveform, np.zeros(SAMPLE_RATE*durration)), axis=0)
+    return np.concatenate((np.zeros(SAMPLE_RATE*durration), waveform), axis=0)
 
 
 def mask_wav(waveform: np.ndarray, start_time: float, end_time: float) -> np.ndarray:
