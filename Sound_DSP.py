@@ -9,31 +9,39 @@ SAMPLE_RATE = 44100
 
 
 
-def gen_square(freq: float, durration: float = 5) -> np.ndarray:
-    t = np.linspace(0, durration, int(SAMPLE_RATE * durration), endpoint=False)
+def gen_square(freq: float, duration: float = 5) -> np.ndarray:
+    t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
     waveform = signal.square(2 * np.pi * freq * t)
     return waveform
 
 
-def gen_sine(freq: float, durration: float = 5) -> np.ndarray:
-    t = np.linspace(0, durration, int(SAMPLE_RATE * durration), endpoint=False)
+def gen_sine(freq: float, duration: float = 5) -> np.ndarray:
+    t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
     waveform = np.sin(2 * np.pi * freq * t)
     return waveform
 
 
-def gen_noise(amplitude: float = 1, durration: float = 5) -> np.ndarray:
-    waveform = np.random.normal(0, amplitude, SAMPLE_RATE * durration)
+def gen_noise(amplitude: float = 1, duration: float = 5) -> np.ndarray:
+    waveform = np.random.normal(0, amplitude, SAMPLE_RATE * duration)
+    return waveform
+
+
+def gen_chirp(start_freq: float, end_freq: float, duration: float = 1) -> np.ndarray:
+    t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
+    waveform = signal.chirp(t, f0=start_freq, f1=end_freq, t1=duration, method="linear")
     return waveform
 
 
 def normalize(waveform: np.ndarray, amplitude: float = 1) -> np.ndarray:
+    if np.max(np.abs(waveform)) == 0:
+        return waveform  # Avoid division by zero
     return amplitude * waveform / np.max(np.abs(waveform))
 
 
-def zero_pad(waveform: np.ndarray, durration: float, end=True) -> np.ndarray:
+def zero_pad(waveform: np.ndarray, duration: float, end=True) -> np.ndarray:
     if end:
-        return np.concatenate((waveform, np.zeros(SAMPLE_RATE*durration)), axis=0)
-    return np.concatenate((np.zeros(SAMPLE_RATE*durration), waveform), axis=0)
+        return np.concatenate((waveform, np.zeros(SAMPLE_RATE*duration)), axis=0)
+    return np.concatenate((np.zeros(SAMPLE_RATE*duration), waveform), axis=0)
 
 
 def mask_wav(waveform: np.ndarray, start_time: float, end_time: float) -> np.ndarray:
@@ -116,14 +124,18 @@ if __name__ == "__main__":
     strat_time = time.time()
 
 
-    fir_lowpass = FIR(SAMPLE_RATE, 5000, order=2000, fir_type="lowpass")
-    fir_highpass = FIR(SAMPLE_RATE, 4000, order=2000, fir_type="highpass")
+    fir_lowpass = FIR(SAMPLE_RATE, 1000, order=2000, fir_type="lowpass")
+    fir_highpass = FIR(SAMPLE_RATE, 200, order=2000, fir_type="highpass")
 
 
     d_time = time.time()
     print("Reading input file...", end="\r")
 
-    waveform = trim_wav(read_wav("Bird.wav"), 0, 10)
+    waveform = trim_wav(read_wav("tapping_with_noise.wav"), 0, 20)
+    waveform = normalize(waveform)
+    # spectogram(waveform)
+    # plt.show()
+    # exit(0)
 
     print(f"Reading input file - \33[92mDone\33[0m in {time.time() - d_time:.2f}s\nFrequency filtering...", end="\r")
     d_time = time.time()
@@ -135,7 +147,10 @@ if __name__ == "__main__":
     d_time = time.time()
 
     waveform = normalize(waveform)
-    template = trim_wav(waveform, 1.75, 1.95)
+    template = trim_wav(waveform, 6.85, 7)
+    # plot_fft(template)
+    # plt.show()
+    # exit(0)
 
     print(f"Normalizing & Storing template - \33[92mDone\33[0m in {time.time() - d_time:.2f}s\nMatched filtering...", end="\r")
     d_time = time.time()
@@ -145,13 +160,12 @@ if __name__ == "__main__":
     print(f"Matched filtering - \33[92mDone\33[0m in {time.time() - d_time:.2f}s\nApplying envelope detection...", end="\r")
     d_time = time.time()
 
-    envelope = envelope_detection(correlation, 30, 600)
-
+    envelope = envelope_detection(correlation, 5, 600)
     print(f"Applying envelope detection - \33[92mDone\33[0m in {time.time() - d_time:.2f}s\nDetecting peaks...", end="\r")
     d_time = time.time()
 
     noise_level = np.std(envelope)
-    peaks = detect_peaks(envelope, prominence=1.7 * noise_level)
+    peaks = detect_peaks(envelope, prominence=3 * noise_level)
 
     print(f"Detecting peaks - \33[92mDone\33[0m in {time.time() - d_time:.2f}s")
     print(f"\33[1;4mTotal processing time: {time.time() - strat_time:.2f}s\33[0m")
